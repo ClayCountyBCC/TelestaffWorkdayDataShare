@@ -23,8 +23,65 @@ namespace TelestaffWorkdayDataShare
     public string Employee_Type { get; set; }
 
 
+    public static List<StaffingData> GetByPayPeriod(DateTime PayPeriodStart)
+    {
+      var ds = new DynamicParameters();
+      ds.Add("@PayPeriodStart", PayPeriodStart);
+      string query = @"
 
-    public static List<StaffingData>Get(DateTime WorkDate)
+SELECT 
+  S.staffing_no_in Staffing_Primary_Key
+  ,SEST.staffing_timestamp_est Staffing_Timestamp
+  ,RMT.RscMaster_EmployeeID_Ch EmployeeID
+  ,W.Wstat_Name_Ch Work_Type_Full
+  ,CASE
+     WHEN LTRIM(RTRIM(W.Wstat_Abrv_Ch)) = ''
+     THEN 'STRAIGHT'
+     ELSE UPPER(LTRIM(RTRIM(W.Wstat_Abrv_Ch)))
+   END Work_Type_Abrv  
+  ,S.staffing_calendar_da Work_Date
+  ,SEST.staffing_start_dt_est Shift_Start_Date
+  ,SEST.staffing_end_dt_est Shift_End_Date
+  ,( CAST(DATEDIFF(minute
+                   ,SEST.Staffing_Start_Dt_est
+                   ,SEST.Staffing_End_Dt_est) AS DECIMAL(10, 2)) / 60 ) Staffing_Hours
+
+  ,CASE R.PayInfo_No_In
+    WHEN 1 THEN 'Field'
+    WHEN 2 THEN 'Dispatch'
+    WHEN 4 THEN 'Office'
+    ELSE ''
+    END Employee_Type
+    
+FROM WorkForceTelestaff.dbo.staffing_tbl S
+INNER JOIN WorkForceTelestaff.dbo.vw_staffing_tbl_est SEST ON S.staffing_no_in = SEST.staffing_no_in
+INNER JOIN WorkForceTelestaff.dbo.Resource_Tbl R ON S.rsc_no_in = R.Rsc_no_in
+INNER JOIN WorkForceTelestaff.dbo.Resource_Master_Tbl RMT ON R.RscMaster_No_in = RMT.RscMaster_No_In
+INNER JOIN WorkForceTelestaff.dbo.wstat_cde_tbl W ON W.wstat_no_in = S.wstat_no_in
+WHERE
+  S.staffing_calendar_da BETWEEN @PayPeriodStart AND DATEADD(DAY, 13, @PayPeriodStart)
+  AND W.Wstat_Abrv_Ch NOT IN ( 'OTR', 'OTRR', 'ORD', 'ORRD',
+                               'NO', 'DPRN', 'BR')
+  AND S.staffing_request_state <> 20
+ORDER BY RMT.RscMaster_EmployeeID_Ch, S.staffing_calendar_da
+";
+
+      try
+      {
+        using (IDbConnection db = new SqlConnection(Program.GetCS("Telestaff")))
+        {
+          return (List<StaffingData>)db.Query<StaffingData>(query, ds);
+        }
+      }
+      catch (Exception ex)
+      {
+        new ErrorLog(ex, query);
+        return null;
+      }
+
+    }
+
+    public static List<StaffingData>GetByCreateDate(DateTime WorkDate)
     {
       var ds = new DynamicParameters();
       ds.Add("@WorkDate", WorkDate);
