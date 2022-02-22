@@ -28,30 +28,6 @@ namespace TelestaffWorkdayDataShare
       var ds = new DynamicParameters();
       ds.Add("@PayPeriodStart", PayPeriodStart);
       string query = @"
-
-WITH UnionEmployees
-     AS (SELECT
-           E.empl_no
-           ,LTRIM(RTRIM(E.l_name)) + ', '
-            + LTRIM(RTRIM(E.f_name)) employee_name
-           ,E.home_orgn
-           ,E.hire_date
-           ,PR.classify
-           ,C.title
-         FROM
-           CLAYBCCFINDB.finplus51.dbo.employee E
-           INNER JOIN CLAYBCCFINDB.finplus51.dbo.person P ON E.empl_no = P.empl_no
-           INNER JOIN CLAYBCCFINDB.finplus51.dbo.payrate PR ON E.empl_no = PR.empl_no
-                                                               AND PR.pay_cd IN ( '001', '002' )
-                                                               AND PR.rate_no = 1
-           INNER JOIN CLAYBCCFINDB.finplus51.dbo.clstable C on PR.classify = C.class_cd
-         WHERE
-          P.term_date IS NULL
-          AND ( E.home_orgn = '1703'
-                 OR ( classify IN ( '0381', '0580', '0580', '0580',
-                                    '0580', '0580', '0580', '0581',
-                                    '0581', '0581', '0581' )
-                      AND E.home_orgn = '2103' ) ))
 SELECT
   S.staffing_no_in Staffing_Primary_Key
   ,SEST.staffing_timestamp_est Staffing_Timestamp
@@ -72,28 +48,30 @@ SELECT
      WHEN 1
      THEN 'Field'
      WHEN 2
-     THEN 'Dispatch'
-     WHEN 4
      THEN 'Office'
+     WHEN 4
+     THEN 'Dispatch'
      ELSE ''
    END Employee_Type
+
 FROM
   WorkForceTelestaff.dbo.staffing_tbl S
   INNER JOIN WorkForceTelestaff.dbo.vw_staffing_tbl_est SEST ON S.staffing_no_in = SEST.staffing_no_in
   INNER JOIN WorkForceTelestaff.dbo.Resource_Tbl R ON S.rsc_no_in = R.Rsc_no_in
   INNER JOIN WorkForceTelestaff.dbo.Resource_Master_Tbl RMT ON R.RscMaster_No_in = RMT.RscMaster_No_In
   INNER JOIN WorkForceTelestaff.dbo.wstat_cde_tbl W ON W.wstat_no_in = S.wstat_no_in
-  INNER JOIN UnionEmployees U ON RMT.RscMaster_EmployeeID_Ch = U.empl_no
+  LEFT OUTER JOIN Job_Title_Tbl J ON J.Job_No_In = R.Job_No_In
 WHERE
   S.staffing_calendar_da BETWEEN @PayPeriodStart AND DATEADD(DAY
                                                              ,13
                                                              ,@PayPeriodStart)
   AND W.Wstat_Abrv_Ch NOT IN ( 'OTR', 'OTRR', 'ORD', 'ORRD',
-                               'OR', 'NO', 'DPRN', 'BR' )
-  AND S.staffing_request_state <> 20
+                               'OR', 'NO', 'DPRN', 'BR', 
+                               'MWI', 'DMWI', 'SLOT')
+  AND J.Job_Abrv_Ch NOT IN ('FC', 'MECH', 'DCO', 'LO', 'ADM', 'LTECH')  
+  AND S.staffing_request_state <> 20 -- Removes Denied requests
 ORDER  BY
-  RMT.RscMaster_EmployeeID_Ch
-  ,S.staffing_calendar_da
+   Shift_Start_Date ASC, EmployeeID ASC
 ";
 
       try
@@ -111,8 +89,16 @@ ORDER  BY
 
     }
 
+
+
     public static List<StaffingData>GetByCreateDate(DateTime WorkDate)
     {
+      /* 
+       * This function has not been updated and is currently unused.
+       * If it is ever to be used again, the output should be changed 
+       * to mirror the GetByPayperiod function
+       * 
+       */
       var ds = new DynamicParameters();
       ds.Add("@WorkDate", WorkDate);
       string query = @"

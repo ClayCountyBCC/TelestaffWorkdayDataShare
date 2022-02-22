@@ -12,6 +12,7 @@ namespace TelestaffWorkdayDataShare
   {
 
     private const string File_Save_Path = @"\\ftp.claycountygov.com\workday\OUTGOING\";
+    private const string Backup_File_Save_Path = @"\\ftp.claycountygov.com\workday\OutgoingBackup\";
 
     // Updating process to fit new requirements.
     // Requirements: Emit a file once every two weeks that has all of the data from the staffing table.
@@ -24,14 +25,18 @@ namespace TelestaffWorkdayDataShare
     // so if it returns rows, we'll create the file.
     static void Main()
     {
+      bool recreate_files = false; 
       DateTime original = DateTime.Parse("9/25/2013");
       DateTime today = DateTime.Today;
+      //DateTime today = DateTime.Parse("1/5/2022");
       int TotalDays = (int)today.Subtract(original).TotalDays;
       int ModTest = TotalDays % 14;
       DateTime PayPeriodStart = today.AddDays(-ModTest);
       if (today.Date != PayPeriodStart) return;
+      PayPeriodStart = PayPeriodStart.AddDays(-14);
 
       string staffing_filename = "";
+      string backup_filename = "";
       string Remote_Login = ConfigurationManager.ConnectionStrings["Remote_Login"].ConnectionString;
       string Remote_Password = ConfigurationManager.ConnectionStrings["Remote_Password"].ConnectionString;
 
@@ -39,34 +44,37 @@ namespace TelestaffWorkdayDataShare
       {
         try
         {
-
-          staffing_filename = File_Save_Path + GetFileName("staffing", PayPeriodStart);
-          if (!File.Exists(staffing_filename))
+          if (recreate_files)
           {
-            var staffingdata = StaffingData.GetByPayPeriod(PayPeriodStart);
-            var staffingtext = StaffingData.ToString(staffingdata);
-            File.WriteAllText(staffing_filename, staffingtext);
+            for (int i = 1; i < 11; i++)
+            {
+              DateTime start = PayPeriodStart.AddDays(-i * 14);
+              staffing_filename = File_Save_Path + GetFileName("staffing", start);
+              backup_filename = Backup_File_Save_Path + GetFileName("staffing", PayPeriodStart);
+              if (File.Exists(staffing_filename)) File.Delete(staffing_filename);
+              var staffingdata = StaffingData.GetByPayPeriod(start);
+              var staffingtext = StaffingData.ToString(staffingdata);
+              File.WriteAllText(staffing_filename, staffingtext);
+              if (File.Exists(backup_filename)) File.Delete(backup_filename);
+              File.WriteAllText(backup_filename, staffingtext);
+            }
           }
-
-
-          //DateTime current = DateTime.Today.AddDays(-1);
-
-          //string current_staffing_filename = File_Save_Path + GetFileName("staffing", current);
-          //string current_changes_filename = File_Save_Path + GetFileName("changes", current);
-
-          //if (!File.Exists(current_staffing_filename))
-          //{
-          //  var staffingdata = StaffingData.Get(current);
-          //  var staffingtext = StaffingData.ToString(staffingdata);
-          //  File.WriteAllText(current_staffing_filename, staffingtext);
-          //}
-
-          //if (!File.Exists(current_changes_filename))
-          //{
-          //  var changedata = ChangeData.Get(current);
-          //  var changetext = ChangeData.ToString(changedata);
-          //  File.WriteAllText(current_changes_filename, changetext);
-          //}
+          else
+          {
+            // This is what we'll use from day to day.
+            staffing_filename = File_Save_Path + GetFileName("staffing", PayPeriodStart);
+            backup_filename = Backup_File_Save_Path + GetFileName("staffing", PayPeriodStart);
+            if (!File.Exists(staffing_filename))
+            {
+              var staffingdata = StaffingData.GetByPayPeriod(PayPeriodStart);
+              var staffingtext = StaffingData.ToString(staffingdata);
+              File.WriteAllText(staffing_filename, staffingtext);
+              if (!File.Exists(backup_filename))
+              {
+                File.WriteAllText(backup_filename, staffingtext);
+              }
+            }
+          }
 
         }
         catch (Exception ex)
