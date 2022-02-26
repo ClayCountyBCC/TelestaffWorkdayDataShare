@@ -32,15 +32,22 @@ SELECT
   S.staffing_no_in Staffing_Primary_Key
   ,SEST.staffing_timestamp_est Staffing_Timestamp
   ,RMT.RscMaster_EmployeeID_Ch EmployeeID
-  ,W.Wstat_Name_Ch Work_Type_Full
-  ,CASE
+  ,CASE WHEN J.Job_Abrv_Ch IN ('ABC', 'AE', 'AC', 'ALT')
+    THEN COALESCE(WL.wstat_name_ch, L.new_work_code_abbreviation, 'WC ERROR')
+    ELSE W.wstat_name_ch
+    END Work_Type_Full
+  ,CASE WHEN J.Job_Abrv_Ch IN ('ABC', 'AE', 'AC', 'ALT')
+    THEN ISNULL(L.new_work_code_abbreviation, 'WC ERROR')
+    ELSE CASE
      WHEN LTRIM(RTRIM(W.Wstat_Abrv_Ch)) = ''
      THEN 'STRAIGHT'
      ELSE UPPER(LTRIM(RTRIM(W.Wstat_Abrv_Ch)))
-   END Work_Type_Abrv
+     END
+    END Work_Type_Abrv
+  ,W.wstat_abrv_ch
   ,S.staffing_calendar_da Work_Date
   ,SEST.staffing_start_dt_est Shift_Start_Date
-  ,SEST.staffing_end_dt_est Shift_End_Date
+  ,DATEADD(MINUTE, -1, SEST.staffing_end_dt_est) Shift_End_Date
   ,( CAST(DATEDIFF(minute
                    ,SEST.Staffing_Start_Dt_est
                    ,SEST.Staffing_End_Dt_est) AS DECIMAL(10, 2)) / 60 ) Staffing_Hours
@@ -53,25 +60,30 @@ SELECT
      THEN 'Dispatch'
      ELSE ''
    END Employee_Type
-
+  --,J.Job_Name_Ch
+  --,J.Job_Abrv_Ch
 FROM
   WorkForceTelestaff.dbo.staffing_tbl S
   INNER JOIN WorkForceTelestaff.dbo.vw_staffing_tbl_est SEST ON S.staffing_no_in = SEST.staffing_no_in
   INNER JOIN WorkForceTelestaff.dbo.Resource_Tbl R ON S.rsc_no_in = R.Rsc_no_in
   INNER JOIN WorkForceTelestaff.dbo.Resource_Master_Tbl RMT ON R.RscMaster_No_in = RMT.RscMaster_No_In
   INNER JOIN WorkForceTelestaff.dbo.wstat_cde_tbl W ON W.wstat_no_in = S.wstat_no_in
-  LEFT OUTER JOIN Job_Title_Tbl J ON J.Job_No_In = R.Job_No_In
+  LEFT OUTER JOIN WorkForceTelestaff.dbo.Job_Title_Tbl J ON J.Job_No_In = R.Job_No_In
+  LEFT OUTER JOIN Timestore.dbo.Telestaff_Acting_Job_Workcode_Lookup L ON J.Job_Abrv_Ch = L.job_abbreviation 
+    AND W.wstat_abrv_ch = L.work_code_abbreviation
+  LEFT OUTER JOIN WorkForceTelestaff.dbo.wstat_cde_tbl WL ON L.new_work_code_abbreviation = WL.wstat_abrv_ch
+  
 WHERE
   S.staffing_calendar_da BETWEEN @PayPeriodStart AND DATEADD(DAY
                                                              ,13
                                                              ,@PayPeriodStart)
   AND W.Wstat_Abrv_Ch NOT IN ( 'OTR', 'OTRR', 'ORD', 'ORRD',
                                'OR', 'NO', 'DPRN', 'BR', 
-                               'MWI', 'DMWI', 'SLOT')
+                               'MWI', 'DMWI', 'SLOT','ADMNSWAPD' )
   AND J.Job_Abrv_Ch NOT IN ('FC', 'MECH', 'DCO', 'LO', 'ADM', 'LTECH')  
+  --AND J.Job_Abrv_Ch IN ('ABC', 'AE', 'AC', 'ALT')
   AND S.staffing_request_state <> 20 -- Removes Denied requests
-ORDER  BY
-   Shift_Start_Date ASC, EmployeeID ASC
+ORDER  BY Shift_Start_Date ASC, EmployeeID ASC
 ";
 
       try

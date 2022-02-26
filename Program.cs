@@ -27,8 +27,8 @@ namespace TelestaffWorkdayDataShare
     {
       bool recreate_files = false; 
       DateTime original = DateTime.Parse("9/25/2013");
-      DateTime today = DateTime.Today;
-      //DateTime today = DateTime.Parse("1/5/2022");
+      //DateTime today = DateTime.Today;
+      DateTime today = DateTime.Parse("3/2/2022");
       int TotalDays = (int)today.Subtract(original).TotalDays;
       int ModTest = TotalDays % 14;
       DateTime PayPeriodStart = today.AddDays(-ModTest);
