@@ -13,6 +13,7 @@ namespace TelestaffWorkdayDataShare
 
     private const string File_Save_Path = @"\\ftp.claycountygov.com\workday\OUTGOING\";
     private const string Backup_File_Save_Path = @"\\ftp.claycountygov.com\workday\OutgoingBackup\";
+    private const string Date_Range_Save_Path = Backup_File_Save_Path;
 
     // Updating process to fit new requirements.
     // Requirements: Emit a file once every two weeks that has all of the data from the staffing table.
@@ -25,14 +26,19 @@ namespace TelestaffWorkdayDataShare
     // so if it returns rows, we'll create the file.
     static void Main()
     {
-      bool recreate_files = false; 
+      bool recreate_files = false;
+
+      bool use_date_range = true;
+#if !DEBUG
+      use_date_range = false;
+#endif
       DateTime original = DateTime.Parse("9/25/2013");
       DateTime today = DateTime.Today;
       //DateTime today = DateTime.Parse("3/2/2022");
       int TotalDays = (int)today.Subtract(original).TotalDays;
       int ModTest = TotalDays % 14;
       DateTime PayPeriodStart = today.AddDays(-ModTest);
-      if (today.Date != PayPeriodStart) return;
+      if (today.Date != PayPeriodStart && !use_date_range) return;
       PayPeriodStart = PayPeriodStart.AddDays(-14);
 
       string staffing_filename = "";
@@ -49,8 +55,8 @@ namespace TelestaffWorkdayDataShare
             for (int i = 1; i < 11; i++)
             {
               DateTime start = PayPeriodStart.AddDays(-i * 14);
-              staffing_filename = File_Save_Path + GetFileName("staffing", start);
-              backup_filename = Backup_File_Save_Path + GetFileName("staffing", PayPeriodStart);
+              staffing_filename = File_Save_Path + GetPayPeriodFilename(start);
+              backup_filename = Backup_File_Save_Path + GetPayPeriodFilename(start);
               if (File.Exists(staffing_filename)) File.Delete(staffing_filename);
               var staffingdata = StaffingData.GetByPayPeriod(start);
               var staffingtext = StaffingData.ToString(staffingdata);
@@ -61,27 +67,40 @@ namespace TelestaffWorkdayDataShare
           }
           else
           {
-            // This is what we'll use from day to day.
-            staffing_filename = File_Save_Path + GetFileName("staffing", PayPeriodStart);
-            backup_filename = Backup_File_Save_Path + GetFileName("staffing", PayPeriodStart);
-            if (!File.Exists(staffing_filename))
+            if (!use_date_range)
             {
-              var staffingdata = StaffingData.GetByPayPeriod(PayPeriodStart);
-              var staffingtext = StaffingData.ToString(staffingdata);
-              File.WriteAllText(staffing_filename, staffingtext);
-              if (!File.Exists(backup_filename))
+              // This is what we'll use from day to day.
+              staffing_filename = File_Save_Path + GetPayPeriodFilename(PayPeriodStart);
+              backup_filename = Backup_File_Save_Path + GetPayPeriodFilename(PayPeriodStart);
+              if (!File.Exists(staffing_filename))
               {
-                File.WriteAllText(backup_filename, staffingtext);
+                var staffingdata = StaffingData.GetByPayPeriod(PayPeriodStart);
+                var staffingtext = StaffingData.ToString(staffingdata);
+                File.WriteAllText(staffing_filename, staffingtext);
+                if (!File.Exists(backup_filename))
+                {
+                  File.WriteAllText(backup_filename, staffingtext);
+                }
               }
             }
+            else
+            {
+              DateTime Start = DateTime.Parse("3/16/2022");
+              DateTime End = DateTime.Parse("3/17/2022");
+              string daterange_filename = Date_Range_Save_Path + GetDateRangeFilename(Start, End);
+              if (File.Exists(daterange_filename)) File.Delete(daterange_filename);
+              var daterangedata = StaffingData.GetByDateRange(Start, End);
+              var daterangetext = StaffingData.ToString(daterangedata);
+              File.WriteAllText(daterange_filename, daterangetext);
+            }
           }
-
         }
         catch (Exception ex)
         {
           new ErrorLog(ex);
         }
       }
+
     }
 
 
@@ -90,9 +109,14 @@ namespace TelestaffWorkdayDataShare
       return ConfigurationManager.ConnectionStrings[cs.ToString()].ConnectionString;
     }
 
-    public static string GetFileName(string filetype, DateTime workdate)
+    public static string GetPayPeriodFilename(DateTime workdate)
     {
-      return "Telestaff_" + (filetype == "staffing" ? "Payperiod_Load" : "Changes") + "_" + workdate.ToString("yyyyMMdd") + ".txt";
+      return "Telestaff_Payperiod_Load_" + workdate.ToString("yyyyMMdd") + ".txt";
+    }
+
+    public static string GetDateRangeFilename(DateTime start, DateTime end)
+    {
+      return "Telestaff_DateRange_Load_" + start.ToString("yyyyMMdd") + "_" + end.ToString("yyyyMMdd") + ".txt";
     }
 
   }
