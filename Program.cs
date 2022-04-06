@@ -13,6 +13,7 @@ namespace TelestaffWorkdayDataShare
 
     private const string File_Save_Path = @"\\ftp.claycountygov.com\workday\OUTGOING\";
     private const string Backup_File_Save_Path = @"\\ftp.claycountygov.com\workday\OutgoingBackup\";
+    private const string Secondary_Save_Path = @"\\claybccfs04\queries\Workday\Telestaff";
     private const string Date_Range_Save_Path = Backup_File_Save_Path;
 
     // Updating process to fit new requirements.
@@ -43,6 +44,7 @@ namespace TelestaffWorkdayDataShare
 
       string staffing_filename = "";
       string backup_filename = "";
+      string secondary_filename = "";
       string Remote_Login = ConfigurationManager.ConnectionStrings["Remote_Login"].ConnectionString;
       string Remote_Password = ConfigurationManager.ConnectionStrings["Remote_Password"].ConnectionString;
 
@@ -70,8 +72,10 @@ namespace TelestaffWorkdayDataShare
             if (!use_date_range)
             {
               // This is what we'll use from day to day.
-              staffing_filename = File_Save_Path + GetPayPeriodFilename(PayPeriodStart);
-              backup_filename = Backup_File_Save_Path + GetPayPeriodFilename(PayPeriodStart);
+              string payperiod_filename = GetPayPeriodFilename(PayPeriodStart);
+              staffing_filename = File_Save_Path + payperiod_filename;
+              backup_filename = Backup_File_Save_Path + payperiod_filename;
+              secondary_filename = Secondary_Save_Path + payperiod_filename;
               if (!File.Exists(staffing_filename))
               {
                 var staffingdata = StaffingData.GetByPayPeriod(PayPeriodStart);
@@ -80,6 +84,10 @@ namespace TelestaffWorkdayDataShare
                 if (!File.Exists(backup_filename))
                 {
                   File.WriteAllText(backup_filename, staffingtext);
+                }
+                if (!File.Exists(secondary_filename))
+                {
+                  File.WriteAllText(secondary_filename, staffingtext);
                 }
               }
             }
